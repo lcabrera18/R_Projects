@@ -1,0 +1,86 @@
+---
+title: "Load All Scripts"
+date: "6/20/2020"
+output: html_document
+---
+
+```{r setup_workbook, include=FALSE}
+library(tidyverse)
+library(tidytext)
+library(politeness)
+library(fs)
+library(spacyr)
+library(wesanderson)
+library(ngram)
+library(RColorBrewer)
+library(lsa)
+
+
+all_scripts_tbl <- dir_ls(path = ".",
+                          recurse = TRUE,
+                          regexp  = ".*parsed_.*\\.rds") %>%
+  enframe(name = NULL, value = "filepath") %>%
+  mutate(script_type  = str_replace(filepath, ".*parsed_(.*?)_scripts\\/.*", "\\1"),
+         year         = str_replace(filepath, ".*\\/(\\d{4})_.*", "\\1"),
+         film_title   = str_replace(filepath, ".*/\\d{4}_(.*)\\.rds", "\\1"),
+         decade       = str_replace(year, '\\d{1}$', '0'),
+         data         = map(filepath, read_rds)) %>%
+  dplyr::select(-filepath) %>% 
+  unnest(data)
+
+screenwriters_tbl <- read_csv("screenwriters_groups.csv")
+
+all_scripts_tbl <- all_scripts_tbl %>% 
+  left_join(screenwriters_tbl, by = "film_title")  
+  
+
+
+
+all_scripts_tbl %>% glimpse()
+```
+
+
+
+```{r rom_com_politeness, echo=TRUE, cache= TRUE}
+
+romcom_polite_tbl <- all_scripts_tbl %>%
+  filter(script_type     == "rom_com") %>%
+  mutate(listener_gender = lag(gender),
+         listener_name   = lag(character_name),
+         n_words         = map_int(dialogue, wordcount),
+         politeval       = politeness(dialogue,
+                                parser   = "spacy")
+         )
+
+polite_tbl <- romcom_polite_tbl$politeval
+
+dialogue_tbl <- bind_cols(
+  romcom_polite_tbl %>% select(-politeval),
+  polite_tbl
+  ) %>%
+  rename("speaker_gender" = "gender", "speaker_name" = "character_name", 
+         "screenwr_gender" = "screenwriter") %>% 
+  relocate(listener_name,   .after = speaker_name) %>%
+  relocate(listener_gender, .after = speaker_gender) %>%
+  relocate(screenwr_gender, .after = listener_gender)
+
+write_rds(dialogue_tbl, "all_scripts_features.rds")
+
+```
+
+
+```{r checking word counts}
+
+word_count_summary <- read_rds("all_scripts_features.rds") %>% 
+  select(gender, n_words) %>% 
+  group_by(gender) %>%
+  summarise(.groups = "drop",
+            word_count = sum(n_words))
+
+character_count <- read_rds("all_scripts_features.rds") %>% 
+  select(character_name, film_title, gender) %>% 
+  distinct()
+  
+
+
+``` 

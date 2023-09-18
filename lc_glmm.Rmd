@@ -1,0 +1,653 @@
+---
+title: "glmm"
+output: html_document
+---
+
+  
+```{r glmer exploratory analysis}
+
+library(tidyverse)
+library(tidytext)
+library(politeness)
+library(fs)
+library(spacyr)
+library(ngram)
+library(lsa)
+library(effects)
+library(MuMIn)
+library(DHARMa)
+library(lme4)
+library(broom.mixed)
+library(emmeans)
+library(optimx)
+library(ggplot2)
+library(lattice)
+library(sjPlot)
+library(sjmisc)
+library(svglite)
+library(multcomp)
+library(equatiomatic)
+
+all_dialogue <- read_rds("all_scripts_features.rds")
+
+all_scripts_features_df <- as.data.frame(all_dialogue) %>% 
+  filter(speaker_gender %in% c("M", "F")) %>% 
+  filter(listener_gender %in% c("M", "F")) %>% 
+  mutate(
+    speaker_gender  = speaker_gender  %>% as.factor() %>% relevel("M"),
+    listener_gender = listener_gender %>% as.factor() %>% relevel("M"), 
+    screenwr_gender = screenwr_gender %>% as.factor() %>% relevel("M"),
+    decade          = decade          %>% as.factor(),
+    Hedging         = (Hedges + By.The.Way + Filler.Pause + For.Me + For.You + 
+                       Adverb.Just + Conjunction.Start + Let.Me.Know + Subjectivity),
+    Boosters        = (Truth.Intensifier + Affirmation),
+    compl_HL        = (n_words - Hello),
+    compl_GB        = (n_words - Goodbye), 
+    compl_FT        = (n_words - Formal.Title),
+    compl_IT        = (n_words - Informal.Title),
+    compl_SW        = (n_words - Swearing), 
+    compl_BC        = (n_words - Bare.Command),
+    compl_NG        = (n_words - Negation),
+    compl_NE        = (n_words - Negative.Emotion),
+    compl_GR        = (n_words - Gratitude),
+    compl_AP        = (n_words - Apology),
+    compl_PL        = (n_words - Please), 
+    compl_TI        = (n_words - Truth.Intensifier), 
+    compl_AG        = (n_words - Agreement), 
+    compl_PE        = (n_words - Positive.Emotion), 
+    compl_GA        = (n_words - Give.Agency),
+    compl_RS        = (n_words - Reassurance),
+    compl_HG        = (n_words - Hedging),
+    compl_RE        = (n_words - Reasoning),
+    compl_AK        = (n_words - Acknowledgement),
+    compl_AF        = (n_words - Affirmation),
+    compl_CD        = (n_words - Could.You), 
+    compl_CY        = (n_words - Can.You), 
+    compl_AA        = (n_words - Ask.Agency),
+    compl_WH        = (n_words - WH.Questions),
+    compl_YN        = (n_words - YesNo.Questions),
+    compl_FP        = (n_words - First.Person.Plural),
+    compl_FS        = (n_words - First.Person.Single),
+    compl_SP        = (n_words - Second.Person), 
+    compl_IP        = (n_words - Impersonal.Pronoun),
+    compl_BS        = (n_words - Boosters)
+        ) 
+ 
+all_scripts_features_df$character_film = paste(all_scripts_features_df$speaker_name, all_scripts_features_df$film_title) 
+
+```
+
+
+
+```{r edges - hello}
+
+
+#GLM Main Effects 
+hl_m <- glmer(cbind(Hello,compl_HL)~ speaker_gender + listener_gender + 
+                screenwr_gender + (1|character_film), 
+                family  = binomial(link= "logit"), 
+                data    = all_scripts_features_df, na.action = "na.fail", 
+                control = glmerControl(optimizer="bobyqa",
+                optCtrl = list(maxfun=100000)))
+
+summary(hl_m)  ## NOTHING SIGNIFICANT 
+
+
+```
+ 
+
+```{r edges - goodbye}
+
+#Goodbye 
+
+gb_m <- glmer(cbind(Goodbye,compl_GB) ~ speaker_gender + listener_gender + 
+              screenwr_gender +  (1|character_film), 
+              family  = binomial(link = "logit"), 
+              data    = all_scripts_features_df, na.action = "na.fail",
+              control = glmerControl(optimizer="bobyqa",
+              optCtrl = list(maxfun=100000)))
+
+summary(gb_m) 
+
+
+```
+
+
+
+```{r address - formal title}
+
+#Formal Title 
+
+ft_m <- glmer(cbind(Formal.Title,compl_FT) ~ speaker_gender + listener_gender + 
+                 screenwr_gender + speaker_gender:listener_gender + (1|character_film), 
+                 family  = binomial(link = "logit"), 
+                 data    = all_scripts_features_df, na.action = "na.fail",
+                 control = glmerControl(optimizer="bobyqa",
+                 optCtrl = list(maxfun=100000)))
+
+summary(ft_m)
+
+```
+
+
+
+```{r address - informal title}
+
+#Informal Title 
+it_m <- glmer(cbind(Informal.Title,compl_IT) ~ speaker_gender + listener_gender +
+                 speaker_gender:listener_gender + (1|character_film), 
+                 family  = binomial(link = "logit"), 
+                 data    = all_scripts_features_df, na.action = "na.fail",
+                 control = glmerControl(optimizer="bobyqa",
+                 optCtrl = list(maxfun=100000)))
+
+summary(it_m)
+
+```
+
+
+
+```{r content - impart - impolite}
+
+#Bare Command
+bc_m <-glmer(cbind(Bare.Command,compl_BC)~ speaker_gender + listener_gender + 
+             screenwr_gender + speaker_gender:listener_gender + (1|character_film), 
+             family  = binomial(link= "logit"), 
+             data    = all_scripts_features_df, na.action = "na.fail",
+             control = glmerControl(optimizer="bobyqa",
+             optCtrl = list(maxfun=100000)))
+
+summary(bc_m)
+
+```
+
+
+```{r content - impart - impolite}
+#Swearing
+
+sw_m <- glmer(cbind(Swearing,compl_SW) ~ speaker_gender + listener_gender + 
+                screenwr_gender + speaker_gender:listener_gender + 
+                (1|character_film), 
+                family  = binomial(link = "logit"),
+                data    = all_scripts_features_df, na.action = "na.fail",
+                control = glmerControl(optimizer="bobyqa",
+                optCtrl = list(maxfun=100000)))
+
+summary(sw_m)
+
+
+#Plot Interactions
+plot_model(sw_m, type = "pred", title = "",
+           terms      = c("speaker_gender","listener_gender", "screenwr_gender"), 
+           ci.lvl     = 0.99) +
+  scale_colour_manual(values = c("purple3", "darkturquoise")) +
+  ggplot2::scale_y_continuous(labels = function(x) insight::format_value(x,
+                                                               as_percent= TRUE,
+                                                               digits=2)) +
+  xlab  ("Speaker Gender") + ylab(" Proportions") +
+  labs  (colour = "Listener Gender") +
+  theme_bw() +
+  theme(axis.text.y.left = element_text(angle = 45, vjust = 0, size = 8)) 
+
+
+```
+
+
+```{r content - impart - impolite}
+
+# Negation 
+ng_m <- glmer(cbind(Negation,compl_NG) ~ speaker_gender + listener_gender +  
+                  speaker_gender:listener_gender + (1|character_film), 
+                  family  = binomial(link = "logit"), 
+                  data    = all_scripts_features_df, na.action = "na.fail",
+                  control = glmerControl(optimizer="bobyqa",
+                  optCtrl = list(maxfun=100000))) 
+
+summary(ng_m)
+
+
+```
+
+
+```{r content - impart - impolite}
+
+# Negative Emotion 
+
+ne_m <- glmer(cbind(Negative.Emotion,compl_NE) ~ speaker_gender + listener_gender + 
+                screenwr_gender + speaker_gender:listener_gender + (1|character_film), 
+                family  = binomial(link = "logit"),
+                data    = all_scripts_features_df, na.action = "na.fail", 
+                control = glmerControl(optimizer="bobyqa",
+                optCtrl = list(maxfun=100000)))
+
+summary(ne_m)
+
+
+```
+
+
+
+```{r content - imprart - polite}
+
+#Gratitude
+gr_m <- glmer(cbind(Gratitude,compl_GR)~ speaker_gender + listener_gender + screenwr_gender + 
+              speaker_gender:listener_gender + (1|character_film), 
+              family  = binomial(link= "logit"), 
+              data    = all_scripts_features_df, na.action = "na.fail",
+              control = glmerControl(optimizer="bobyqa",
+              optCtrl = list(maxfun=100000)))
+
+summary(gr_m)
+
+```
+
+
+```{r content - impart - polite}
+
+#Apologies
+ap_m <- glmer(cbind(Apology,compl_AP)~ speaker_gender + listener_gender +  
+               speaker_gender:listener_gender + (1|character_film), 
+               family  = binomial(link= "logit"), 
+               data    = all_scripts_features_df, na.action = "na.fail",
+               control = glmerControl(optimizer="bobyqa",
+               optCtrl = list(maxfun=100000)))
+
+summary(ap_m)
+
+```
+
+
+```{r content - impart - polite}
+
+#Please
+pl_m <- glmer(cbind(Please,compl_PL)~ speaker_gender +  
+              (1|character_film), 
+              family  = binomial(link= "logit"), 
+              data    = all_scripts_features_df, na.action = "na.fail",
+              control = glmerControl(optimizer="bobyqa",
+              optCtrl = list(maxfun=100000)))
+
+summary(pl_m)
+
+```
+
+
+
+
+
+```{r content - impart - politeI}
+
+# Plot Content - Impart - Polite I 
+
+polite_impartI_tbl <- list(gratitude_tbl , apology_tbl, please_tbl, intensifier_tbl) %>% bind_rows()
+
+polite_impartI_tbl  %>%
+  filter(term != "(Intercept)") %>%
+  filter(term != "sd__(Intercept)") %>%
+  ggplot(.) +
+    geom_point(aes(x = term, y = estimate, colour = feature),
+               position = position_dodge(width = 0.2)) +
+    geom_errorbar(aes(x    = term,
+                      ymin = estimate - 2 * std.error,
+                      ymax = estimate + 2 * std.error,
+                      colour = feature),
+                  position = position_dodge(width = 0.2),
+                  width = 0) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0, size = 6))
+
+
+```
+
+
+
+
+```{r content - impart - politeII}
+
+#Positive Emotion
+
+pe_m <- glmer(cbind(Positive.Emotion,compl_PE) ~ speaker_gender + listener_gender + 
+                screenwr_gender + speaker_gender:listener_gender + (1|character_film), 
+                family  = binomial(link = "logit"), 
+                data    = all_scripts_features_df, na.action = "na.fail", 
+                control = glmerControl(optimizer="bobyqa",
+                optCtrl = list(maxfun=100000))) 
+
+summary(pe_m)
+
+
+#Plot Interactions
+
+plot_model(pe_m, type = "pred",
+           terms      = c("speaker_gender","listener_gender"),
+           ci.lvl     = 0.99) +
+  scale_colour_manual(values = c("purple3", "darkturquoise")) +
+  ggplot2::scale_y_continuous(labels = function(x) insight::format_value(x,
+                                                               as_percent=TRUE,
+                                                               digits=2)) +
+  ggtitle("Proportions by Screenwriter Groups - Positive Emotion") +
+  xlab ("Speaker Gender") + ylab("Proportions") +
+  labs (colour = "Listener Gender") +
+  theme_bw() +
+  theme(axis.text.y.left = element_text(angle = 45, vjust = 0, size = 8))
+
+
+```
+
+
+```{r content - impart - politeII}
+
+#Give Agency
+
+ga_m <- glmer(cbind(Give.Agency,compl_GA)~ + (1|character_film), 
+              family  = binomial(link= "logit"), 
+              data    = all_scripts_features_df, na.action = "na.fail",
+              control = glmerControl(optimizer="bobyqa",
+              optCtrl = list(maxfun=100000)))
+
+summary(ga_m) ##NOTHING SIGNIFICANT - NULL MODEL BEST FIT 
+
+
+```
+
+
+```{r content - impart - politeII}
+
+#Reassurance
+reas_m <- glmer(cbind(Reassurance,compl_RS)~ speaker_gender + listener_gender + 
+                  speaker_gender:listener_gender + (1|character_film), 
+                  family  = binomial(link= "logit"), 
+                  data    = all_scripts_features_df, na.action = "na.fail",
+                  control = glmerControl(optimizer="bobyqa",
+                  optCtrl = list(maxfun=100000)))
+
+summary(reas_m)
+
+```
+
+
+
+```{r content - impart - politeIII}
+
+#Hedging 
+hdg_m <- glmer(cbind(Hedging,compl_HG)~ speaker_gender + listener_gender + 
+               speaker_gender:listener_gender + (1|character_film), 
+               family = binomial(link = "logit"), 
+               data    = all_scripts_features_df, na.action = "na.fail", 
+               control = glmerControl(optimizer="bobyqa",
+               optCtrl = list(maxfun=100000)))
+
+summary(hdg_m)
+
+
+#Plot Interactions
+plot_model(hdg_m, type = "pred",
+           terms      = c("speaker_gender"),
+           ci.lvl     = 0.99) +
+  scale_colour_manual(values = c("purple3", "darkturquoise")) +
+  ggplot2::scale_y_continuous(labels = function(x) insight::format_value(x,
+                                                               as_percent=TRUE,
+                                                               digits=2)) +
+  ggtitle("Predicted Hedges Proportions") +
+  xlab ("Speaker Gender") + ylab("Proportions") +
+  theme_bw() +
+  theme(axis.text.y.left = element_text(angle = 45, vjust = 0, size = 8))
+
+
+```
+
+
+
+```{r content - impart - politeII}
+
+#Acknowledgment
+
+ak_m <- glmer(cbind(Acknowledgement,compl_AK)~ speaker_gender + 
+                 (1|character_film), 
+                 family  = binomial(link= "logit"), 
+                 data    = all_scripts_features_df, na.action = "na.fail",
+                 control = glmerControl(optimizer="bobyqa",
+                 optCtrl = list(maxfun=100000)))
+
+summary(ak_m) 
+
+```
+
+
+
+```{r content - inquire - polite}
+
+#Could You
+could_m <- glmer(cbind(Could.You,compl_CD) ~ listener_gender + 
+                (1|character_film), 
+                family  = binomial(link = "logit"), 
+                data    = all_scripts_features_df, na.action = "na.fail",
+                control = glmerControl(optimizer="bobyqa",
+                optCtrl = list(maxfun=100000))) 
+
+summary(could_m) 
+
+```
+
+
+
+```{r content - inquire - polite}
+
+#Can You
+can_m <- glmer(cbind(Can.You,compl_CY) ~ speaker_gender + listener_gender + 
+               screenwr_gender + speaker_gender:listener_gender + 
+               speaker_gender:screenwr_gender + (1|character_film), 
+               family  = binomial(link = "logit"), 
+               data    = all_scripts_features_df, na.action = "na.fail",
+               control = glmerControl(optimizer="bobyqa",
+               optCtrl = list(maxfun=100000)))
+
+summary(can_m)
+
+```
+
+
+
+```{r content - inquire - polite}
+
+#Ask Agency
+ag_m <- glmer(cbind(Ask.Agency,compl_AA)~ speaker_gender + (1|character_film), 
+               family  = binomial(link= "logit"), 
+               data    = all_scripts_features_df, na.action = "na.fail",
+               control = glmerControl(optimizer = "optimx", calc.derivs = FALSE,
+               optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE)))
+
+summary(ag_m) 
+
+```
+
+
+
+```{r content - inqure - direct questions}
+
+#WH. Questions
+
+wh_m <- glmer(cbind(WH.Questions,compl_WH)~ speaker_gender + listener_gender + 
+              screenwr_gender + speaker_gender:listener_gender + (1|character_film), 
+              family  = binomial(link= "logit"), 
+              data    = all_scripts_features_df, na.action = "na.fail",
+              control = glmerControl(optimizer="bobyqa",
+              optCtrl = list(maxfun=100000)))
+
+summary(wh_m)
+
+```
+
+
+
+```{r content - inquire - direct questions}
+
+#Yes.No Questions
+
+yn_m <- glmer(cbind(YesNo.Questions,compl_YN)~ speaker_gender + listener_gender + 
+              screenwr_gender + speaker_gender:listener_gender + (1|character_film), 
+              family  = binomial(link= "logit"), 
+              data    = all_scripts_features_df, na.action = "na.fail",
+              control = glmerControl(optimizer="bobyqa",
+              optCtrl = list(maxfun=100000)))
+
+summary(yn_m)
+
+
+#Plot Interactions 
+plot_model(yn_m, type = "pred",
+           terms      = c("speaker_gender","listener_gender"),
+           ci.lvl     = 0.99) +
+  scale_colour_manual(values = c("purple3", "darkturquoise")) +
+  ggplot2::scale_y_continuous(labels = function(x) insight::format_value(x,
+                                                               as_percent=TRUE,
+                                                               digits=2)) +
+  ggtitle("Estimated Proportions - Yes/No Questions") +
+  xlab ("Speaker Gender") + ylab("Proportions") +
+  labs (colour = "Listener Gender") +
+  theme(axis.text.y.left = element_text(angle = 45, vjust = 0, size = 8))
+
+
+```
+
+
+```{r language and gender}
+
+#First Person Plural 
+
+fpp_m <- glmer(cbind(First.Person.Plural,compl_FP)~ speaker_gender  + 
+               (1|character_film), 
+               family  = binomial(link= "logit"), 
+               data    = all_scripts_features_df, na.action = "na.fail",
+               control = glmerControl(optimizer="bobyqa",
+               optCtrl = list(maxfun=100000)))
+
+summary(fpp_m) 
+```
+
+
+
+```{r language and gender}
+
+#First Person Singular 
+fps_m <- glmer(cbind(First.Person.Single,compl_FS)~ speaker_gender + listener_gender + 
+                 speaker_gender:listener_gender + (1|character_film), 
+                 family  = binomial(link= "logit"), 
+                 data    = all_scripts_features_df, na.action = "na.fail",
+                 control = glmerControl(optimizer="bobyqa",
+                 optCtrl = list(maxfun=100000)))
+
+summary(fps_m)
+
+#Plot Interactions
+plot_model(fps_m, type = "pred",
+           terms      = c("speaker_gender","listener_gender"),
+           ci.lvl     = 0.99) +
+  scale_colour_manual(values = c("purple3", "darkturquoise")) +
+  ggplot2::scale_y_continuous(labels = function(x) insight::format_value(x,
+                                                               as_percent=TRUE,
+                                                               digits=2)) +
+  ggtitle("Estimated Proportions - Firs Person Singular") +
+  xlab ("Speaker Gender") + ylab("Proportions") +
+  labs (colour = "Listener Gender") +
+  theme_bw() +
+  theme(axis.text.y.left = element_text(angle = 45, vjust = 0, size = 8))
+
+
+```
+
+
+
+```{r language and gender}
+
+# Second Person
+sp_m <- glmer(cbind(Second.Person,compl_SP)~ speaker_gender + listener_gender + 
+              speaker_gender:listener_gender + (1|character_film), 
+              family  = binomial(link= "logit"), 
+              data    = all_scripts_features_df, na.action = "na.fail",
+              control = glmerControl(optimizer="bobyqa",
+              optCtrl = list(maxfun=100000)))
+
+summary(sp_m)
+
+#Plot Interactions
+plot_model(sp_m, type = "pred",
+           terms      = c("speaker_gender","listener_gender"),
+           ci.lvl     = 0.99) +
+  scale_colour_manual(values = c("purple3", "darkturquoise")) +
+  ggplot2::scale_y_continuous(labels = function(x) insight::format_value(x,
+                                                               as_percent=TRUE,
+                                                               digits=2)) +
+  ggtitle("Proportions Interaction by Gender") +
+  xlab ("Speaker Gender") + ylab("Proportions") +
+  labs (colour = "Listener Gender") +
+  theme_bw() +
+  theme(axis.text.y.left = element_text(angle = 45, vjust = 0, size = 8))
+
+
+#Tidy GLM Output
+second_person_tbl <- sp_m %>%
+tidy() %>%
+  mutate(feature = "Second Person", .before = 1)
+
+```
+
+
+
+```{r language and gender}
+
+#Impersonal Pronoun
+imp_m <- glmer(cbind(Impersonal.Pronoun,compl_IP) ~ speaker_gender + listener_gender + 
+               screenwr_gender + speaker_gender:listener_gender + (1|character_film), 
+               family  = binomial(link = "logit"), 
+               data    = all_scripts_features_df, na.action = "na.fail",
+               control = glmerControl(optimizer="bobyqa",
+               optCtrl = list(maxfun=100000)))
+
+summary(imp_m)
+
+
+#Plot Interactions
+plot_model(imp_m, type = "pred",
+           terms      = c("speaker_gender","listener_gender"),
+           ci.lvl     = 0.99) +
+  scale_colour_manual(values = c("purple3", "darkturquoise")) +
+  ggplot2::scale_y_continuous(labels = function(x) insight::format_value(x,
+                                                                       as_percent=TRUE,
+                                                                       digits=2)) +
+  ggtitle("Proportions by Screenwriter Groups") +
+  xlab ("Speaker Gender") + ylab("Proportions") +
+  labs (colour = "Listener Gender") +
+  theme(axis.text.y.left = element_text(angle = 45, vjust = 0, size = 8))
+
+```
+
+
+```{r}
+#Intensifiers 
+bst_m <- glmer(cbind(Boosters,compl_BS) ~ speaker_gender + listener_gender + 
+                speaker_gender:listener_gender + (1|character_film), 
+                family  = binomial(link = "logit"),
+                data    = all_scripts_features_df, na.action = "na.fail",
+                control = glmerControl(optimizer="bobyqa",
+                optCtrl = list(maxfun=100000)))
+
+
+
+summary(bst_m)
+
+#Plot Interactions
+plot_model(bst_m, type = "pred",
+           terms          = c("speaker_gender","listener_gender"),
+           ci.lvl         = 0.99) +
+  scale_colour_manual(values = c("purple3", "darkturquoise")) +
+  ggplot2::scale_y_continuous(labels = function(x) insight::format_value(x,
+                                                                       as_percent=TRUE,
+                                                                       digits=2)) +
+  ggtitle("Predicted Proportions") +
+  xlab ("Speaker Gender") + ylab("Proportions") +
+  labs (colour = "Listener Gender") +
+  theme_bw() +
+  theme(axis.text.y.left = element_text(angle = 45, vjust = 0, size = 8))
+
+```
+
